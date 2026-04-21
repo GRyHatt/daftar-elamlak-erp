@@ -1,26 +1,25 @@
 import { useState, useEffect } from 'react';
-import { Calculator, CalendarClock, AlertTriangle, CheckCircle, UserCheck, Receipt, ArrowLeftRight, Building, MapPin, Printer, MessageCircle, Search, Trash2 } from 'lucide-react';
+import { Calculator, CalendarClock, AlertTriangle, CheckCircle, UserCheck, Receipt, ArrowLeftRight, Building, MapPin, Printer, MessageCircle, Search, Trash2, FileText, X } from 'lucide-react';
 import { supabase } from '../supabaseClient';
 
 export default function Sales() {
-  const [activeTab, setActiveTab] = useState('contracts'); 
-  
+  const [activeTab, setActiveTab] = useState('contracts');
   const [buyers, setBuyers] = useState([]);
   const [offerings, setOfferings] = useState([]);
   const [contracts, setContracts] = useState([]);
   const [installments, setInstallments] = useState([]);
-  
   const [stats, setStats] = useState({ totalSales: 0, collected: 0, overdue: 0 });
   const [searchQuery, setSearchQuery] = useState('');
-
+  
+  // حالات الطباعة وكشف الحساب
   const [printData, setPrintData] = useState(null);
+  const [statementData, setStatementData] = useState(null);
   
   const [newContract, setNewContract] = useState({
     buyer_name: '', national_id: '', phone: '', address: '', 
     property_source: 'طرح داخلي', offering_id: '', external_unit_name: '', unit_type: 'شقة',
     total_price: '', down_payment: '', installment_years: '3', penalty_percent: '0.1', start_date: new Date().toISOString().split('T')[0]
   });
-  
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -58,7 +57,7 @@ export default function Sales() {
     try {
       let buyerId;
       const { data: existingBuyer } = await supabase.from('buyers').select('id').eq('national_id', newContract.national_id).single();
-      
+
       if (existingBuyer) {
         buyerId = existingBuyer.id;
         await supabase.from('buyers').update({ full_name: newContract.buyer_name, phone: newContract.phone, address: newContract.address }).eq('id', buyerId);
@@ -160,59 +159,52 @@ export default function Sales() {
     setPrintData(contract);
     setTimeout(() => {
       window.print();
-      setPrintData(null); // قفل العقد بعد الطباعة للرجوع للصفحة
+      setPrintData(null);
     }, 500);
   };
 
   const filteredContracts = contracts.filter(c => c.buyers?.full_name.includes(searchQuery) || c.buyers?.national_id.includes(searchQuery));
 
+  // حسابات كشف الحساب
+  const statementInsts = statementData ? installments.filter(i => i.contract_id === statementData.id) : [];
+  const stmtPaidTotal = statementInsts.filter(i => i.status === 'مدفوع').reduce((sum, i) => sum + Number(i.amount_due), 0);
+  const stmtPenaltiesTotal = statementInsts.filter(i => i.status === 'مدفوع').reduce((sum, i) => sum + Number(i.penalty_amount || 0), 0);
+  const stmtRemaining = statementData ? Number(statementData.total_price) - Number(statementData.down_payment) - stmtPaidTotal : 0;
+
   return (
     <div className="space-y-8 animate-fade-in pb-20 relative">
       
-      {/* 🖨️ العقد القانوني للطباعة (تعديل جذري للسماح بتعدد الصفحات) */}
+      {/* 🖨️ ستايل الطباعة الموحد للعقود وكشوفات الحساب */}
+      <style>
+        {`
+          @media print {
+            @page { size: A4; margin: 15mm; }
+            html, body, #root, main, .overflow-y-auto, .overflow-hidden {
+              height: auto !important;
+              overflow: visible !important;
+              position: static !important;
+              background: white !important;
+            }
+            .print-hide { display: none !important; }
+            .page-break-inside-avoid { page-break-inside: avoid; }
+          }
+        `}
+      </style>
+
+      {/* 🖨️ العقد القانوني للطباعة */}
       {printData && (
         <div className="hidden print:block text-black bg-white w-full" dir="rtl" style={{ fontFamily: 'Arial, sans-serif', lineHeight: '1.8' }}>
-          
-          {/* ستايل سحري بيلغي كل قيود الريأكت ويسمح للورق يطبع براحته */}
-          <style>
-            {`
-              @media print {
-                @page { size: A4; margin: 15mm; }
-                /* إلغاء الـ Scroll وإجبار المتصفح يعرض كل المحتوى للطباعة */
-                html, body, #root, main, .overflow-y-auto, .overflow-hidden {
-                  height: auto !important;
-                  overflow: visible !important;
-                  position: static !important;
-                  background: white !important;
-                }
-                .print-hide { display: none !important; }
-                
-                /* الحفاظ على التوقيعات في صفحة واحدة إذا أمكن */
-                .page-break-inside-avoid {
-                  page-break-inside: avoid;
-                }
-              }
-            `}
-          </style>
-
-          {/* هيدر العقد */}
           <div className="text-center border-b-2 border-black pb-4 mb-8">
             <h1 className="text-3xl font-bold mb-2">عقد بيع ابتدائي (بنظام التقسيط)</h1>
             <p className="text-xl font-bold">شركة دفتر الأملاك لإدارة العقارات والمقاولات</p>
           </div>
-
           <div className="text-lg text-justify">
-            <p className="mb-6">
-              إنه في يوم (.................) الموافق <strong>{new Date(printData.created_at).toLocaleDateString('ar-EG')}</strong>، تم الاتفاق والتراضي بين كل من:
-            </p>
-
-            {/* أطراف العقد */}
+            <p className="mb-6">إنه في يوم (.................) الموافق <strong>{new Date(printData.created_at).toLocaleDateString('ar-EG')}</strong>، تم الاتفاق والتراضي بين كل من:</p>
             <div className="mb-6">
               <p className="font-bold">أولاً: شركة دفتر الأملاك لإدارة العقارات</p>
               <p className="mr-8">ويمثلها قانوناً في التوقيع على هذا العقد السيد/ ..............................................................</p>
               <p className="font-bold mr-8 mt-2 text-left">(طــرف أول بائــع)</p>
             </div>
-
             <div className="mb-8">
               <p className="font-bold">ثانياً: السيد/ة <strong>{printData.buyers?.full_name}</strong></p>
               <p className="mr-8">
@@ -222,29 +214,19 @@ export default function Sales() {
               </p>
               <p className="font-bold mr-8 mt-2 text-left">(طــرف ثانــي مشتــري)</p>
             </div>
-
             <p className="font-bold text-center text-xl mb-6 border-y-2 border-black py-2">تمهيــــد</p>
             <p className="mb-6">بعد أن أقر الطرفان بأهليتهما القانونية والفعلية للتعاقد والتصرف، وعدم خضوع أي منهما لأحكام الحراسة، اتفقا على تحرير هذا العقد وفقاً للبنود الآتية:</p>
-
-            {/* البنود */}
             <div className="space-y-6">
               <p><strong className="underline">البند الأول (موضوع العقد):</strong> يُعتبر التمهيد السابق جزء لا يتجزأ من هذا العقد. بموجب هذا العقد باع وأسقط وتنازل الطرف الأول (الشركة) للطرف الثاني (المشتري)، القابل لذلك، الوحدة العقارية عبارة عن (<strong>{printData.unit_type}</strong>) بمشروع/عقار: (<strong>{printData.property_source === 'طرح داخلي' ? printData.offerings?.title : printData.external_unit_name}</strong>).</p>
               <p className="mr-4">رقم الوحدة: (........) بالدور (........) ومساحتها الإجمالية (........) متر مربع تقريباً.</p>
-
               <p><strong className="underline">البند الثاني (الثمن وطريقة السداد):</strong> تم هذا البيع نظير ثمن إجمالي قدره <strong>{Number(printData.total_price).toLocaleString()} ج.م</strong> (فقط وقدره ..........................................................................).<br/>
               - دفع الطرف الثاني مبلغ <strong>{Number(printData.down_payment).toLocaleString()} ج.م</strong> كدفعة مقدمة عند توقيع هذا العقد ويعتبر توقيع الطرف الأول بمثابة مخالصة باستلام المقدم.<br/>
               - يتبقى مبلغ قدره <strong>{Number(printData.total_price - printData.down_payment).toLocaleString()} ج.م</strong>، يلتزم الطرف الثاني بسداده على أقساط شهرية لمدة <strong>{printData.installment_years} سنوات</strong>، بقيمة قسط شهري <strong>{Math.round((printData.total_price - printData.down_payment) / (printData.installment_years * 12)).toLocaleString()} ج.م</strong>.</p>
-
               <p><strong className="underline">البند الثالث (غرامات التأخير والفسخ):</strong> يلتزم الطرف الثاني بسداد الأقساط في مواعيدها. وفي حالة التأخير يُطبق غرامة تأخير بواقع <strong>{printData.penalty_percent}%</strong> عن كل يوم تأخير. وإذا تأخر الطرف الثاني عن سداد عدد (3) أقساط متتالية يُعتبر هذا العقد مفسوخاً من تلقاء نفسه دون حاجة لإنذار أو حكم قضائي، ويحق للطرف الأول خصم 10% من إجمالي قيمة العقد كمصروفات إدارية تعويضاً له.</p>
-
               <p><strong className="underline">البند الرابع (الملكية والتسليم):</strong> لا تنتقل ملكية الوحدة المبيعة للطرف الثاني إلا بعد سداد كامل الثمن المتفق عليه في البند الثاني بجميع أقساطه وغراماته إن وجدت. ويتعهد الطرف الأول بتسليم الوحدة للطرف الثاني في الموعد المتفق عليه بحالة صالحة للاستخدام للغرض الذي أعدت من أجله.</p>
-
               <p><strong className="underline">البند الخامس (المحاكم المختصة):</strong> تختص محاكم (.........................) بالنظر في أي نزاع قد ينشأ -لا قدر الله- حول تفسير أو تنفيذ بنود هذا العقد.</p>
-
               <p><strong className="underline">البند السادس (نسخ العقد):</strong> تحرر هذا العقد من نسختين بيد كل طرف نسخة للعمل بموجبها عند اللزوم ومطالبة الجهات الرسمية.</p>
             </div>
-
-            {/* التوقيعات (استخدام كلاس page-break-inside-avoid عشان متتقصش نصين) */}
             <div className="mt-20 flex justify-between px-10 page-break-inside-avoid">
               <div className="text-center w-1/3">
                 <p className="font-bold text-lg mb-8 border-b-2 border-black inline-block pb-1">الطرف الأول (البائع)</p>
@@ -260,6 +242,137 @@ export default function Sales() {
                 <p className="font-bold text-lg mb-8 border-b-2 border-black inline-block pb-1">الطرف الثاني (المشتري)</p>
                 <p>الاسم: <strong>{printData.buyers?.full_name}</strong></p>
                 <p className="mt-8">التوقيع: .......................................</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 📄 نافذة كشف الحساب */}
+      {statementData && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex justify-center items-start pt-10 px-4 overflow-y-auto print:static print:bg-white print:p-0 print:block">
+          <div className="bg-white w-full max-w-5xl rounded-3xl p-8 shadow-2xl relative mb-10 print:w-full print:m-0 print:p-0 print:shadow-none border border-slate-100 print:border-none">
+            
+            {/* أزرار التحكم (مخفية في الطباعة) */}
+            <div className="print-hide flex gap-2 absolute top-6 left-6">
+              <button onClick={() => { setTimeout(() => window.print(), 300); }} className="flex items-center gap-2 bg-indigo-50 text-indigo-700 hover:bg-indigo-600 hover:text-white px-4 py-2 rounded-full font-bold transition-all">
+                <Printer size={18} /> طباعة التقرير
+              </button>
+              <button onClick={() => setStatementData(null)} className="p-2 bg-slate-100 text-slate-500 hover:bg-red-500 hover:text-white rounded-full transition-all">
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* هيدر كشف الحساب */}
+            <div className="text-center border-b-2 border-slate-200 pb-6 mb-8 mt-4 print:mt-0">
+              <h1 className="text-3xl font-black text-slate-800 mb-2">كشف حساب تفصيلي</h1>
+              <p className="text-slate-500 font-bold">شركة دفتر الأملاك لإدارة العقارات</p>
+            </div>
+
+            {/* بيانات العميل والعقار */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8 bg-slate-50 p-6 rounded-2xl border border-slate-100 print:bg-transparent print:border-slate-300 print:p-4">
+              <div>
+                <p className="text-xs text-slate-400 font-bold mb-1">اسم العميل</p>
+                <p className="font-bold text-slate-800">{statementData.buyers?.full_name}</p>
+              </div>
+              <div>
+                <p className="text-xs text-slate-400 font-bold mb-1">رقم الهاتف</p>
+                <p className="font-bold text-slate-800" dir="ltr">{statementData.buyers?.phone}</p>
+              </div>
+              <div>
+                <p className="text-xs text-slate-400 font-bold mb-1">الوحدة / العقار</p>
+                <p className="font-bold text-slate-800">{statementData.property_source === 'طرح داخلي' ? statementData.offerings?.title : statementData.external_unit_name}</p>
+              </div>
+              <div>
+                <p className="text-xs text-slate-400 font-bold mb-1">تاريخ التعاقد</p>
+                <p className="font-bold text-slate-800">{new Date(statementData.created_at).toLocaleDateString('ar-EG')}</p>
+              </div>
+            </div>
+
+            {/* الإحصائيات المالية للعقد */}
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-10 text-center">
+              <div className="bg-white border rounded-xl p-4 shadow-sm print:shadow-none">
+                <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">إجمالي العقد</p>
+                <p className="font-black text-slate-800 text-lg">{Number(statementData.total_price).toLocaleString()}</p>
+              </div>
+              <div className="bg-white border rounded-xl p-4 shadow-sm print:shadow-none">
+                <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">المقدم المدفوع</p>
+                <p className="font-black text-emerald-600 text-lg">{Number(statementData.down_payment).toLocaleString()}</p>
+              </div>
+              <div className="bg-white border rounded-xl p-4 shadow-sm print:shadow-none">
+                <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">أقساط مسددة</p>
+                <p className="font-black text-blue-600 text-lg">{stmtPaidTotal.toLocaleString()}</p>
+              </div>
+              <div className="bg-white border rounded-xl p-4 shadow-sm print:shadow-none">
+                <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">المتبقي المستحق</p>
+                <p className="font-black text-red-600 text-lg">{stmtRemaining.toLocaleString()}</p>
+              </div>
+              <div className="bg-amber-50 border border-amber-100 rounded-xl p-4 shadow-sm print:shadow-none print:border-slate-200">
+                <p className="text-[10px] font-bold text-amber-600 uppercase mb-1">إجمالي الغرامات</p>
+                <p className="font-black text-amber-700 text-lg">{stmtPenaltiesTotal.toLocaleString()}</p>
+              </div>
+            </div>
+
+            {/* جدول تفاصيل الأقساط */}
+            <h3 className="font-bold text-lg mb-4 text-slate-800 border-r-4 border-indigo-600 pr-2">سجل حركة الأقساط</h3>
+            <div className="overflow-x-auto">
+              <table className="w-full text-right text-sm border-collapse">
+                <thead className="bg-slate-100 text-slate-600 border-b-2 border-slate-200 print:bg-slate-50">
+                  <tr>
+                    <th className="p-3">#</th>
+                    <th className="p-3">الاستحقاق</th>
+                    <th className="p-3">قيمة القسط</th>
+                    <th className="p-3 text-center">الحالة</th>
+                    <th className="p-3">الغرامة</th>
+                    <th className="p-3">الإجمالي المدفوع</th>
+                    <th className="p-3">تاريخ الدفع</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {statementInsts.map((inst, index) => {
+                    const isPaid = inst.status === 'مدفوع';
+                    const lateInfo = isPaid ? null : calculateLateInfo(inst.due_date, inst.amount_due, statementData.penalty_percent);
+                    const finalPaid = isPaid ? (inst.amount_due + (inst.penalty_amount || 0)) : '-';
+                    
+                    return (
+                      <tr key={inst.id} className={`transition-colors ${isPaid ? 'bg-emerald-50/20' : lateInfo?.late ? 'bg-red-50/30' : ''}`}>
+                        <td className="p-3 font-bold text-slate-400">{index + 1}</td>
+                        <td className="p-3 font-bold text-slate-700">{new Date(inst.due_date).toLocaleDateString('ar-EG')}</td>
+                        <td className="p-3 font-black text-slate-800">{Number(inst.amount_due).toLocaleString()}</td>
+                        <td className="p-3 text-center">
+                          {isPaid 
+                            ? <span className="text-emerald-600 font-bold text-xs bg-emerald-100 px-2 py-1 rounded">مسدد</span> 
+                            : lateInfo?.late 
+                              ? <span className="text-red-600 font-bold text-xs bg-red-100 px-2 py-1 rounded">متأخر</span>
+                              : <span className="text-slate-500 font-bold text-xs bg-slate-100 px-2 py-1 rounded">انتظار</span>
+                          }
+                        </td>
+                        <td className="p-3 text-xs">
+                          {isPaid 
+                            ? <span className={inst.penalty_amount > 0 ? "text-amber-600 font-bold" : "text-slate-400"}>{inst.penalty_amount > 0 ? `+${inst.penalty_amount.toLocaleString()}` : '-'}</span>
+                            : lateInfo?.late 
+                              ? <span className="text-red-500 font-bold">+{lateInfo.penalty.toLocaleString()}</span>
+                              : <span className="text-slate-400">-</span>
+                          }
+                        </td>
+                        <td className="p-3 font-black text-indigo-700">{isPaid ? finalPaid.toLocaleString() : '-'}</td>
+                        <td className="p-3 text-xs font-bold text-slate-500">{isPaid ? new Date(inst.paid_date).toLocaleDateString('ar-EG') : '-'}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            {/* توقيعات كشف الحساب في الطباعة */}
+            <div className="hidden print:flex justify-between px-10 mt-20 pt-10 border-t-2 border-slate-200">
+              <div className="text-center font-bold">
+                <p>توقيع العميل</p>
+                <p className="mt-8 text-slate-300">................................</p>
+              </div>
+              <div className="text-center font-bold">
+                <p>توقيع المحاسب</p>
+                <p className="mt-8 text-slate-300">................................</p>
               </div>
             </div>
 
@@ -361,6 +474,9 @@ export default function Sales() {
                         <td className="p-4 font-bold text-emerald-600">{Number(c.down_payment).toLocaleString()}</td>
                         <td className="p-4 text-slate-600">{c.installment_years} سنوات</td>
                         <td className="p-4 flex justify-center gap-2">
+                          {/* زرار كشف الحساب الجديد */}
+                          <button onClick={() => setStatementData(c)} className="p-2 bg-emerald-50 text-emerald-600 hover:bg-emerald-600 hover:text-white rounded-lg transition-all" title="كشف حساب مفصل"><FileText size={18}/></button>
+                          
                           <button onClick={() => handlePrint(c)} className="p-2 bg-indigo-50 text-indigo-600 hover:bg-indigo-600 hover:text-white rounded-lg transition-all" title="طباعة العقد"><Printer size={18}/></button>
                           <button onClick={() => handleDeleteContract(c.id, c.buyers?.full_name)} className="p-2 bg-red-50 text-red-500 hover:bg-red-600 hover:text-white rounded-lg transition-all" title="حذف العقد نهائياً"><Trash2 size={18}/></button>
                         </td>
