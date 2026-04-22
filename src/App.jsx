@@ -1,8 +1,9 @@
 import { useState } from 'react';
-import { BrowserRouter, Routes, Route, Link, useLocation } from 'react-router-dom';
-import { LayoutDashboard, Contact, Calculator, Building2, Users, FileSpreadsheet, FileText, ShieldAlert, Menu, X, LogOut, Wallet, HardHat } from 'lucide-react';
+import { BrowserRouter, Routes, Link, Route, useLocation } from 'react-router-dom';
+import { LayoutDashboard, Contact, Layers, Calculator, Building2, Users, FileSpreadsheet, FileText, ShieldAlert, Menu, X, LogOut, Wallet, HardHat, Home } from 'lucide-react';
 
 // استدعاء الصفحات
+import LandingPage from './pages/LandingPage';
 import Dashboard from './pages/Dashboard';
 import Offerings from './pages/Offerings';
 import OfferingDetails from './pages/OfferingDetails';
@@ -12,9 +13,10 @@ import Reports from './pages/Reports';
 import Employees from './pages/Employees';
 import InvestorPortal from './pages/InvestorPortal';
 import Login from './pages/Login';
-import Contracting from './pages/Contracting'; // 🔴 استدعاء صفحة المقاولات الجديدة
+import Contracting from './pages/Contracting';
 import Directory from './pages/Directory';
 import Sales from './pages/Sales';
+import DocumentMerger from './pages/DocumentMerger';
 
 // --- مكون NavItem (عنصر القائمة) ---
 function NavItem({ to, icon: Icon, children, onClick }) {
@@ -101,18 +103,17 @@ export default function App() {
     // لو أدمن أو موظف، يشوف القائمة دي
     return (
       <>
-        <NavItem to="/" icon={LayoutDashboard} onClick={() => setIsSidebarOpen(false)}>لوحة القيادة</NavItem>
+        <NavItem to="/" icon={Home} onClick={() => setIsSidebarOpen(false)}>الواجهة الرئيسية</NavItem>
+        <NavItem to="/dashboard" icon={LayoutDashboard} onClick={() => setIsSidebarOpen(false)}>لوحة القيادة</NavItem>
         <NavItem to="/offerings" icon={Building2} onClick={() => setIsSidebarOpen(false)}>إدارة الطروحات</NavItem>
-        
-        {/* 🔴 زرار المقاولات والمصروفات الجديد */}
         <NavItem to="/contracting" icon={HardHat} onClick={() => setIsSidebarOpen(false)}>المقاولات والمصروفات</NavItem>
-        
         <NavItem to="/investors" icon={Users} onClick={() => setIsSidebarOpen(false)}>سجل المستثمرين</NavItem>
         <NavItem to="/ledger" icon={FileSpreadsheet} onClick={() => setIsSidebarOpen(false)}>دفتر الحسابات</NavItem>
-        <NavItem to="/reports" icon={FileText} onClick={() => setIsSidebarOpen(false)}>تقارير الأرباح</NavItem>
-        <NavItem to="/contracting" icon={HardHat} onClick={() => setIsSidebarOpen(false)}>المقاولات والمصروفات</NavItem>
-        <NavItem to="/directory" icon={Contact} onClick={() => setIsSidebarOpen(false)}>دليل العلاقات</NavItem>
         <NavItem to="/sales" icon={Calculator} onClick={() => setIsSidebarOpen(false)}>المبيعات والأقساط</NavItem>
+        <NavItem to="/reports" icon={FileText} onClick={() => setIsSidebarOpen(false)}>تقارير الأرباح</NavItem>
+        <NavItem to="/directory" icon={Contact} onClick={() => setIsSidebarOpen(false)}>دليل العلاقات</NavItem>
+        <NavItem to="/merger" icon={Layers} onClick={() => setIsSidebarOpen(false)}>أداة دمج المستندات</NavItem>
+        
         {user.role === 'admin' && (
           <NavItem to="/employees" icon={ShieldAlert} onClick={() => setIsSidebarOpen(false)}>إدارة الموظفين</NavItem>
         )}
@@ -128,17 +129,17 @@ export default function App() {
              <Route path="*" element={<InvestorPortal />} />
           ) : (
              <>
-                <Route path="/" element={<Dashboard />} />
+                <Route path="/" element={<LandingPage />} />
+                <Route path="/dashboard" element={<Dashboard />} />
                 <Route path="/offerings" element={<Offerings />} />
                 <Route path="/offering/:id" element={<OfferingDetails />} />
-                
-                {/* 🔴 مسار صفحة المقاولات */}
                 <Route path="/contracting" element={<Contracting />} />
                 <Route path="/directory" element={<Directory />} />
                 <Route path="/investors" element={<Investors />} />
                 <Route path="/ledger" element={<Ledger />} />
                 <Route path="/reports" element={<Reports />} />
                 <Route path="/sales" element={<Sales />} />
+                <Route path="/merger" element={<DocumentMerger />} />
                 {user.role === 'admin' && <Route path="/employees" element={<Employees />} />}
              </>
           )}
