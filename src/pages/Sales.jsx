@@ -1,34 +1,35 @@
 import { useState, useEffect } from 'react';
-import { Calculator, CalendarClock, Layers, AlertTriangle, CheckCircle, UserCheck, Receipt, ArrowLeftRight, Building, MapPin, Printer, MessageCircle, Search, Trash2, FileText, X, Paperclip, Download, PlusCircle, Edit2 } from 'lucide-react';
+import { 
+  Calculator, CalendarClock, Layers, CheckCircle, UserCheck, 
+  Receipt, ArrowLeftRight, Building, MapPin, Printer, MessageCircle, 
+  Search, Trash2, FileText, X, Paperclip, Download, PlusCircle, 
+  Edit2, TrendingUp, AlertCircle, Wallet
+} from 'lucide-react';
 import { supabase } from '../supabaseClient';
 
 export default function Sales() {
   const [activeTab, setActiveTab] = useState('contracts');
-  const [buyers, setBuyers] = useState([]);
   const [offerings, setOfferings] = useState([]);
   const [contracts, setContracts] = useState([]);
   const [installments, setInstallments] = useState([]);
+  
+  // إحصائيات لوحة القيادة
   const [stats, setStats] = useState({ totalSales: 0, collected: 0, overdue: 0 });
   const [searchQuery, setSearchQuery] = useState('');
   
-  // حالات التعديل
   const [editingContractId, setEditingContractId] = useState(null);
-
-  // حالات الطباعة وكشف الحساب
   const [printData, setPrintData] = useState(null);
   const [statementData, setStatementData] = useState(null);
   const [statementTab, setStatementTab] = useState('ledger'); 
   
-  // الدفعات الاستثنائية
+  // الدفعات
   const [customPayment, setCustomPayment] = useState({ amount: '', date: new Date().toISOString().split('T')[0], note: '' });
   const [showCustomPaymentForm, setShowCustomPaymentForm] = useState(false);
-  
   const [globalCustomPayment, setGlobalCustomPayment] = useState({ contract_id: '', amount: '', date: new Date().toISOString().split('T')[0], note: '' });
   const [showGlobalPaymentForm, setShowGlobalPaymentForm] = useState(false);
 
   // ملفات العقد
   const [contractFiles, setContractFiles] = useState([]);
-
   const [newContract, setNewContract] = useState({
     buyer_name: '', national_id: '', phone: '', address: '', 
     property_source: 'طرح داخلي', offering_id: '', external_unit_name: '', unit_type: 'شقة',
@@ -59,7 +60,6 @@ export default function Sales() {
         const { late, penalty } = calculateLateInfo(i.due_date, i.amount_due, i.contracts?.penalty_percent);
         if (late) tOverdue += (Number(i.amount_due) + penalty);
       });
-
       setStats({ totalSales: tSales, collected: tCollected, overdue: tOverdue });
     }
   };
@@ -67,14 +67,13 @@ export default function Sales() {
   const handleAddContractFiles = (e) => {
     const newFiles = Array.from(e.target.files);
     setContractFiles(prev => [...prev, ...newFiles]);
-    e.target.value = ''; 
+    e.target.value = '';
   };
 
   const handleRemoveContractFile = (indexToRemove) => {
     setContractFiles(prev => prev.filter((_, index) => index !== indexToRemove));
   };
 
-  // ✏️ دالة بدء التعديل
   const startEditContract = (contract) => {
     setEditingContractId(contract.id);
     setNewContract({
@@ -103,7 +102,6 @@ export default function Sales() {
     setContractFiles([]);
   };
 
-  // 💾 دالة الإضافة أو التحديث (مدمجة)
   const handleSubmitContract = async (e) => {
     e.preventDefault();
     setLoading(true);
@@ -111,7 +109,7 @@ export default function Sales() {
     try {
       let buyerId;
       const { data: existingBuyer } = await supabase.from('buyers').select('id').eq('national_id', newContract.national_id).single();
-
+      
       if (existingBuyer) {
         buyerId = existingBuyer.id;
         await supabase.from('buyers').update({ full_name: newContract.buyer_name, phone: newContract.phone, address: newContract.address }).eq('id', buyerId);
@@ -137,11 +135,9 @@ export default function Sales() {
       };
 
       if (editingContractId) {
-        // حالة التعديل
         const { error: contractError } = await supabase.from('contracts').update(contractPayload).eq('id', editingContractId);
         if (contractError) throw contractError;
 
-        // رفع المرفقات الجديدة وإضافتها للقديمة
         if (contractFiles.length > 0) {
           const { data: currentContract } = await supabase.from('contracts').select('attachments').eq('id', editingContractId).single();
           let currentAttachments = [];
@@ -160,24 +156,21 @@ export default function Sales() {
           await supabase.from('contracts').update({ attachments: finalAttachments }).eq('id', editingContractId);
         }
 
-        alert(`تم تحديث بيانات العقد بنجاح!\n\nملاحظة: إذا قمت بتغيير (السعر أو المدة)، فإن جدول الأقساط القديم لن يتعدل تلقائياً للحفاظ على الدفعات المسددة من العميل.`);
+        alert(`تم تحديث بيانات العقد بنجاح!`);
         setEditingContractId(null);
       } else {
-        // حالة إضافة عقد جديد
         contractPayload.attachments = [];
         const { data: createdContract, error: contractError } = await supabase.from('contracts').insert([contractPayload]).select().single();
         if (contractError) throw contractError;
 
-        // رفع المرفقات
         let finalAttachments = [];
         if (contractFiles.length > 0) {
           for (let file of contractFiles) {
             const fileExt = file.name.split('.').pop();
             const fileName = `${createdContract.id}-${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
             const { error: uploadError } = await supabase.storage.from('attachments').upload(fileName, file);
-            
             if (uploadError) {
-              alert(`فشل رفع الملف: ${file.name}\nيرجى التأكد من إعدادات الـ Bucket في Supabase.`);
+              alert(`فشل رفع الملف: ${file.name}`);
             } else {
               const { data: publicUrlData } = supabase.storage.from('attachments').getPublicUrl(fileName);
               finalAttachments.push({ name: file.name, url: publicUrlData.publicUrl, date: new Date().toISOString().split('T')[0] });
@@ -188,7 +181,7 @@ export default function Sales() {
           }
         }
 
-        // جدولة الأقساط آلياً للعقد الجديد
+        // جدولة الأقساط بدقة الفلوت
         const remainingAmount = contractPayload.total_price - contractPayload.down_payment;
         const freqMap = { 'شهري': 1, 'ربع سنوي': 3, 'نصف سنوي': 6, 'سنوي': 12 };
         const stepMonths = freqMap[newContract.payment_frequency] || 1;
@@ -204,13 +197,13 @@ export default function Sales() {
           installmentsArray.push({
             contract_id: createdContract.id,
             due_date: dueDate.toISOString().split('T')[0],
-            amount_due: Math.round(installmentAmount),
+            amount_due: Number(installmentAmount.toFixed(2)), // تقريب الأقساط لمنزلتين عشريتين
             notes: `قسط ${newContract.payment_frequency}`
           });
         }
 
         await supabase.from('installments').insert(installmentsArray);
-        alert(`تم إنشاء العقد بنجاح!`);
+        alert(`تم إنشاء العقد وجدولة الأقساط بنجاح!`);
       }
 
       setNewContract({ buyer_name: '', national_id: '', phone: '', address: '', property_source: 'طرح داخلي', offering_id: '', external_unit_name: '', unit_type: 'شقة', total_price: '', down_payment: '', installment_months: '36', payment_frequency: 'شهري', penalty_percent: '0.1', start_date: new Date().toISOString().split('T')[0] });
@@ -224,7 +217,7 @@ export default function Sales() {
   };
 
   const handlePayInstallment = async (inst, calculatedPenalty) => {
-    if (window.confirm(`تأكيد سداد القسط؟\nالمبلغ: ${inst.amount_due}\nالغرامة: ${calculatedPenalty}\nالإجمالي: ${inst.amount_due + calculatedPenalty} ج.م`)) {
+    if (window.confirm(`تأكيد سداد القسط؟\nالمبلغ: ${inst.amount_due}\nالغرامة: ${calculatedPenalty}\nالإجمالي: ${(inst.amount_due + calculatedPenalty).toFixed(2)} ج.م`)) {
       await supabase.from('installments').update({
         status: 'مدفوع',
         paid_date: new Date().toISOString().split('T')[0],
@@ -282,13 +275,14 @@ export default function Sales() {
     setLoading(false);
   };
 
+  // تعديل الحسبة لتدعم الأرقام العشرية بشكل دقيق
   const calculateLateInfo = (dueDate, amountDue, penaltyPercent) => {
     const today = new Date();
     const due = new Date(dueDate);
     if (today > due) {
       const diffTime = Math.abs(today - due);
       const daysLate = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-      const penalty = Math.round((amountDue * (penaltyPercent / 100)) * daysLate);
+      const penalty = Number(((amountDue * (Number(penaltyPercent) / 100)) * daysLate).toFixed(2));
       return { late: true, daysLate, penalty };
     }
     return { late: false, daysLate: 0, penalty: 0 };
@@ -315,29 +309,59 @@ export default function Sales() {
   };
 
   const filteredContracts = contracts.filter(c => c.buyers?.full_name.includes(searchQuery) || c.buyers?.national_id.includes(searchQuery));
-
+  
   const statementInsts = statementData ? installments.filter(i => i.contract_id === statementData.id).sort((a,b) => new Date(a.due_date) - new Date(b.due_date)) : [];
   const stmtPaidTotal = statementInsts.filter(i => i.status === 'مدفوع').reduce((sum, i) => sum + Number(i.amount_due), 0);
   const stmtPenaltiesTotal = statementInsts.filter(i => i.status === 'مدفوع').reduce((sum, i) => sum + Number(i.penalty_amount || 0), 0);
   const stmtRemaining = statementData ? Number(statementData.total_price) - Number(statementData.down_payment) - stmtPaidTotal : 0;
-
-  // فحص ذكي للملفات المرفقة
+  
   let parsedAttachments = [];
   if (statementData && statementData.attachments) {
-    try {
-      parsedAttachments = typeof statementData.attachments === 'string' 
-        ? JSON.parse(statementData.attachments) 
-        : statementData.attachments;
-    } catch(e) {
-      console.error("Error parsing attachments", e);
-      parsedAttachments = [];
-    }
+    try { parsedAttachments = typeof statementData.attachments === 'string' ? JSON.parse(statementData.attachments) : statementData.attachments; } 
+    catch(e) { parsedAttachments = []; }
   }
 
   return (
-    <div className="space-y-8 animate-fade-in pb-20 relative">
+    <div className="space-y-8 animate-fade-in pb-20 relative" dir="rtl">
       
       <style>{`@media print { @page { size: A4; margin: 15mm; } html, body, #root, main, .overflow-y-auto, .overflow-hidden { height: auto !important; overflow: visible !important; position: static !important; background: white !important; } .print-hide { display: none !important; } .page-break-inside-avoid { page-break-inside: avoid; } }`}</style>
+
+      {/* --- الهيدر الإحصائي الجديد (SaaS Style) --- */}
+      <div className="print-hide bg-[#0f172a] rounded-[2.5rem] border border-slate-800 p-8 shadow-2xl relative overflow-hidden flex flex-col md:flex-row items-center justify-between gap-6 mb-8">
+        <div className="absolute top-0 right-0 w-64 h-64 bg-blue-600/20 rounded-full blur-[80px] -mr-20 -mt-20 pointer-events-none"></div>
+        <div className="relative z-10 flex items-center gap-4 text-white">
+          <div className="p-4 bg-indigo-600 rounded-2xl shadow-lg shadow-indigo-500/30"><Calculator size={32}/></div>
+          <div>
+            <h2 className="text-3xl font-black">المبيعات والأقساط</h2>
+            <p className="text-slate-400 font-bold text-sm mt-1">إدارة العقود، التدفقات النقدية، وغرامات التأخير</p>
+          </div>
+        </div>
+      </div>
+
+      {/* كروت الملخص المالي السريع */}
+      <div className="print-hide grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm flex items-center gap-5 hover:shadow-lg transition-shadow">
+          <div className="p-4 bg-blue-50 text-blue-600 rounded-2xl"><TrendingUp size={28}/></div>
+          <div>
+            <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">إجمالي المبيعات التعاقدية</p>
+            <p className="text-2xl font-black text-slate-800" dir="ltr">{stats.totalSales.toLocaleString()} <span className="text-sm text-slate-500">ج.م</span></p>
+          </div>
+        </div>
+        <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm flex items-center gap-5 hover:shadow-lg transition-shadow">
+          <div className="p-4 bg-emerald-50 text-emerald-600 rounded-2xl"><Wallet size={28}/></div>
+          <div>
+            <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">المحصل الفعلي (خزينة)</p>
+            <p className="text-2xl font-black text-slate-800" dir="ltr">{stats.collected.toLocaleString()} <span className="text-sm text-slate-500">ج.م</span></p>
+          </div>
+        </div>
+        <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm flex items-center gap-5 hover:shadow-lg transition-shadow">
+          <div className="p-4 bg-red-50 text-red-600 rounded-2xl"><AlertCircle size={28}/></div>
+          <div>
+            <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">متأخرات وغرامات قيد التحصيل</p>
+            <p className="text-2xl font-black text-slate-800" dir="ltr">{stats.overdue.toLocaleString()} <span className="text-sm text-slate-500">ج.م</span></p>
+          </div>
+        </div>
+      </div>
 
       {/* 🖨️ العقد القانوني للطباعة */}
       {printData && (
@@ -369,62 +393,64 @@ export default function Sales() {
 
       {/* 📄 نافذة كشف الحساب والمرفقات */}
       {statementData && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex justify-center items-start pt-10 px-4 overflow-y-auto print:static print:bg-white print:p-0 print:block">
-          <div className="bg-white w-full max-w-5xl rounded-3xl p-8 shadow-2xl relative mb-10 border border-slate-100 print:w-full print:m-0 print:p-0 print:border-none print:shadow-none">
+        <div className="fixed inset-0 z-50 bg-slate-900/80 backdrop-blur-md flex justify-center items-start pt-10 px-4 overflow-y-auto print:static print:bg-white print:p-0 print:block animate-fade-in">
+          <div className="bg-white w-full max-w-5xl rounded-[2rem] p-8 shadow-2xl relative mb-10 border border-slate-100 print:w-full print:m-0 print:p-0 print:border-none print:shadow-none">
             <div className="print-hide flex justify-between items-center mb-6">
-              <div className="flex gap-2 bg-slate-100 p-1 rounded-xl">
-                <button onClick={() => setStatementTab('ledger')} className={`px-6 py-2 rounded-lg font-bold transition-all ${statementTab === 'ledger' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500'}`}>كشف الحساب</button>
-                <button onClick={() => setStatementTab('attachments')} className={`px-6 py-2 rounded-lg font-bold transition-all ${statementTab === 'attachments' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500'}`}>المرفقات والأوراق</button>
+              <div className="flex bg-slate-100 p-1 rounded-xl">
+                <button onClick={() => setStatementTab('ledger')} className={`px-6 py-2.5 rounded-lg font-black transition-all ${statementTab === 'ledger' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500'}`}>كشف الحساب (Ledger)</button>
+                <button onClick={() => setStatementTab('attachments')} className={`px-6 py-2.5 rounded-lg font-black transition-all ${statementTab === 'attachments' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500'}`}>المستندات والأوراق</button>
               </div>
               <div className="flex gap-2">
-                <button onClick={() => { setTimeout(() => window.print(), 300); }} className="flex items-center gap-2 bg-indigo-50 text-indigo-700 hover:bg-indigo-600 hover:text-white px-4 py-2 rounded-xl font-bold transition-all"><Printer size={18} /> طباعة</button>
-                <button onClick={() => setStatementData(null)} className="p-2 bg-slate-100 text-slate-500 hover:bg-red-500 hover:text-white rounded-xl transition-all"><X size={20} /></button>
+                <button onClick={() => { setTimeout(() => window.print(), 300); }} className="flex items-center gap-2 bg-indigo-50 hover:bg-indigo-600 text-indigo-700 hover:text-white px-5 py-2.5 rounded-xl font-bold transition-colors"><Printer size={18} /> طباعة رسمية</button>
+                <button onClick={() => setStatementData(null)} className="p-2.5 bg-slate-100 text-slate-500 hover:bg-red-500 hover:text-white rounded-xl transition-colors"><X size={20} /></button>
               </div>
             </div>
 
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8 bg-slate-50 p-6 rounded-2xl border border-slate-100 print:bg-transparent print:border-slate-300 print:p-4">
-              <div><p className="text-xs text-slate-400 font-bold mb-1">اسم العميل</p><p className="font-bold text-slate-800">{statementData.buyers?.full_name}</p></div>
-              <div><p className="text-xs text-slate-400 font-bold mb-1">الوحدة / العقار</p><p className="font-bold text-slate-800">{statementData.property_source === 'طرح داخلي' ? statementData.offerings?.title : statementData.external_unit_name}</p></div>
-              <div><p className="text-xs text-slate-400 font-bold mb-1">إجمالي العقد</p><p className="font-black text-indigo-700">{Number(statementData.total_price).toLocaleString()} ج.م</p></div>
-              <div><p className="text-xs text-slate-400 font-bold mb-1">المتبقي المستحق</p><p className="font-black text-red-600">{stmtRemaining.toLocaleString()} ج.م</p></div>
+              <div><p className="text-xs text-slate-400 font-bold mb-1 uppercase">اسم العميل</p><p className="font-black text-slate-800 text-lg">{statementData.buyers?.full_name}</p></div>
+              <div><p className="text-xs text-slate-400 font-bold mb-1 uppercase">الوحدة / العقار</p><p className="font-black text-slate-800 text-lg">{statementData.property_source === 'طرح داخلي' ? statementData.offerings?.title : statementData.external_unit_name}</p></div>
+              <div><p className="text-xs text-slate-400 font-bold mb-1 uppercase">إجمالي قيمة العقد</p><p className="font-black text-indigo-600 text-xl" dir="ltr">{Number(statementData.total_price).toLocaleString()} ج.م</p></div>
+              <div><p className="text-xs text-slate-400 font-bold mb-1 uppercase">المتبقي المستحق للشركة</p><p className="font-black text-red-600 text-xl" dir="ltr">{stmtRemaining.toLocaleString()} ج.م</p></div>
             </div>
 
             {statementTab === 'ledger' && (
               <div className="animate-fade-in">
-                <div className="grid grid-cols-3 md:grid-cols-4 gap-4 mb-8 text-center print-hide">
-                  <div className="bg-white border rounded-xl p-4 shadow-sm"><p className="text-[10px] font-bold text-slate-400 uppercase mb-1">المقدم المدفوع</p><p className="font-black text-emerald-600 text-lg">{Number(statementData.down_payment).toLocaleString()}</p></div>
-                  <div className="bg-white border rounded-xl p-4 shadow-sm"><p className="text-[10px] font-bold text-slate-400 uppercase mb-1">أقساط ودفعات مسددة</p><p className="font-black text-blue-600 text-lg">{stmtPaidTotal.toLocaleString()}</p></div>
-                  <div className="bg-amber-50 border border-amber-100 rounded-xl p-4 shadow-sm"><p className="text-[10px] font-bold text-amber-600 uppercase mb-1">إجمالي الغرامات</p><p className="font-black text-amber-700 text-lg">{stmtPenaltiesTotal.toLocaleString()}</p></div>
-                  <div className="bg-white border rounded-xl p-4 shadow-sm flex flex-col justify-center"><button onClick={() => setShowCustomPaymentForm(!showCustomPaymentForm)} className="flex items-center justify-center gap-2 text-indigo-600 font-bold hover:text-indigo-800"><PlusCircle size={18}/> تسجيل دفعة</button></div>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8 text-center print-hide">
+                  <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm"><p className="text-[10px] font-bold text-slate-400 uppercase mb-1">المقدم المدفوع</p><p className="font-black text-emerald-600 text-xl" dir="ltr">{Number(statementData.down_payment).toLocaleString()}</p></div>
+                  <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm"><p className="text-[10px] font-bold text-slate-400 uppercase mb-1">أقساط مسددة</p><p className="font-black text-blue-600 text-xl" dir="ltr">{stmtPaidTotal.toLocaleString()}</p></div>
+                  <div className="bg-amber-50 border border-amber-100 rounded-2xl p-4 shadow-sm"><p className="text-[10px] font-bold text-amber-600 uppercase mb-1">إجمالي الغرامات المحصلة</p><p className="font-black text-amber-700 text-xl" dir="ltr">{stmtPenaltiesTotal.toLocaleString()}</p></div>
+                  <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 shadow-sm flex flex-col justify-center hover:bg-slate-100 cursor-pointer transition-colors" onClick={() => setShowCustomPaymentForm(!showCustomPaymentForm)}>
+                    <p className="flex items-center justify-center gap-2 text-indigo-600 font-black"><PlusCircle size={20}/> دفعة استثنائية</p>
+                  </div>
                 </div>
 
                 {showCustomPaymentForm && (
                   <form onSubmit={handleRecordCustomPayment} className="bg-indigo-50 border border-indigo-100 p-6 rounded-2xl mb-8 flex gap-4 items-end print-hide animate-fade-in">
-                    <div className="flex-1 space-y-1"><label className="text-xs font-bold text-indigo-700">المبلغ *</label><input type="number" required value={customPayment.amount} onChange={e=>setCustomPayment({...customPayment, amount:e.target.value})} className="w-full p-3 rounded-xl border-indigo-200 outline-none"/></div>
-                    <div className="flex-1 space-y-1"><label className="text-xs font-bold text-indigo-700">تاريخ الدفع *</label><input type="date" required value={customPayment.date} onChange={e=>setCustomPayment({...customPayment, date:e.target.value})} className="w-full p-3 rounded-xl border-indigo-200 outline-none"/></div>
-                    <div className="flex-2 space-y-1"><label className="text-xs font-bold text-indigo-700">ملاحظات</label><input type="text" value={customPayment.note} onChange={e=>setCustomPayment({...customPayment, note:e.target.value})} className="w-full p-3 rounded-xl border-indigo-200 outline-none"/></div>
-                    <button type="submit" disabled={loading} className="p-3 bg-indigo-600 text-white font-bold rounded-xl hover:bg-indigo-700">خصم من المتبقي</button>
+                    <div className="flex-1 space-y-1"><label className="text-xs font-bold text-indigo-700">المبلغ المدفوع (Float مسموح) *</label><input type="number" step="any" required value={customPayment.amount} onChange={e=>setCustomPayment({...customPayment, amount:e.target.value})} className="w-full p-3 rounded-xl border border-indigo-200 outline-none font-bold"/></div>
+                    <div className="flex-1 space-y-1"><label className="text-xs font-bold text-indigo-700">تاريخ السداد *</label><input type="date" required value={customPayment.date} onChange={e=>setCustomPayment({...customPayment, date:e.target.value})} className="w-full p-3 rounded-xl border border-indigo-200 outline-none font-bold"/></div>
+                    <div className="flex-2 space-y-1"><label className="text-xs font-bold text-indigo-700">ملاحظات / بيان</label><input type="text" value={customPayment.note} onChange={e=>setCustomPayment({...customPayment, note:e.target.value})} className="w-full p-3 rounded-xl border border-indigo-200 outline-none font-bold"/></div>
+                    <button type="submit" disabled={loading} className="p-3 px-6 bg-indigo-600 text-white font-black rounded-xl hover:bg-indigo-700 shadow-lg">خصم وتسجيل</button>
                   </form>
                 )}
 
-                <h3 className="font-bold text-lg mb-4 text-slate-800 border-r-4 border-indigo-600 pr-2">سجل حركة الأقساط</h3>
-                <div className="overflow-x-auto">
+                <h3 className="font-black text-lg mb-4 text-slate-800 border-r-4 border-indigo-600 pr-3">حركة الحساب (سجل الأقساط)</h3>
+                <div className="overflow-x-auto rounded-xl border border-slate-200">
                   <table className="w-full text-right text-sm border-collapse">
                     <thead className="bg-slate-100 text-slate-600 border-b-2 border-slate-200 print:bg-slate-50">
-                      <tr><th className="p-3">#</th><th className="p-3">البيان</th><th className="p-3">الاستحقاق</th><th className="p-3">القيمة</th><th className="p-3 text-center">الحالة</th><th className="p-3">الدفع</th></tr>
+                      <tr><th className="p-4 font-bold">#</th><th className="p-4 font-bold">البيان</th><th className="p-4 font-bold">تاريخ الاستحقاق</th><th className="p-4 font-bold">قيمة القسط</th><th className="p-4 text-center font-bold">حالة السداد</th><th className="p-4 font-bold">تاريخ الدفع</th></tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
                       {statementInsts.map((inst, index) => {
                         const isPaid = inst.status === 'مدفوع';
                         const lateInfo = isPaid ? null : calculateLateInfo(inst.due_date, inst.amount_due, statementData.penalty_percent);
                         return (
-                          <tr key={inst.id} className={`transition-colors ${isPaid ? 'bg-emerald-50/20' : lateInfo?.late ? 'bg-red-50/30' : ''}`}>
-                            <td className="p-3 font-bold text-slate-400">{index + 1}</td>
-                            <td className="p-3 text-slate-600 font-medium">{inst.notes || 'قسط مجدول'}</td>
-                            <td className="p-3 font-bold text-slate-700">{new Date(inst.due_date).toLocaleDateString('ar-EG')}</td>
-                            <td className="p-3 font-black text-slate-800">{Number(inst.amount_due).toLocaleString()}</td>
-                            <td className="p-3 text-center">{isPaid ? <span className="text-emerald-600 text-xs bg-emerald-100 px-2 py-1 rounded">مسدد</span> : lateInfo?.late ? <span className="text-red-600 text-xs bg-red-100 px-2 py-1 rounded">متأخر</span> : <span className="text-slate-500 text-xs bg-slate-100 px-2 py-1 rounded">انتظار</span>}</td>
-                            <td className="p-3 text-xs font-bold text-slate-500">{isPaid ? new Date(inst.paid_date).toLocaleDateString('ar-EG') : '-'}</td>
+                          <tr key={inst.id} className={`transition-colors ${isPaid ? 'bg-emerald-50/40 hover:bg-emerald-50' : lateInfo?.late ? 'bg-red-50/40 hover:bg-red-50' : 'hover:bg-slate-50'}`}>
+                            <td className="p-4 font-bold text-slate-400">{index + 1}</td>
+                            <td className="p-4 text-slate-700 font-bold">{inst.notes || 'قسط مجدول'}</td>
+                            <td className="p-4 font-bold text-slate-800">{new Date(inst.due_date).toLocaleDateString('ar-EG')}</td>
+                            <td className="p-4 font-black text-slate-800" dir="ltr">{Number(inst.amount_due).toLocaleString()}</td>
+                            <td className="p-4 text-center">{isPaid ? <span className="text-emerald-700 text-xs bg-emerald-100 px-3 py-1 rounded-md font-black">مسدد</span> : lateInfo?.late ? <span className="text-red-700 text-xs bg-red-100 px-3 py-1 rounded-md font-black">متأخر</span> : <span className="text-slate-500 text-xs bg-slate-100 px-3 py-1 rounded-md font-black">انتظار</span>}</td>
+                            <td className="p-4 text-xs font-bold text-slate-500">{isPaid ? new Date(inst.paid_date).toLocaleDateString('ar-EG') : '-'}</td>
                           </tr>
                         );
                       })}
@@ -436,22 +462,23 @@ export default function Sales() {
 
             {statementTab === 'attachments' && (
               <div className="animate-fade-in print-hide">
-                <h3 className="font-bold text-lg mb-4 text-slate-800 border-r-4 border-indigo-600 pr-2">أرشيف المستندات</h3>
+                <h3 className="font-black text-lg mb-4 text-slate-800 border-r-4 border-indigo-600 pr-3">أرشيف المستندات والوثائق</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                   {parsedAttachments.length > 0 ? (
                     parsedAttachments.map((file, idx) => (
-                      <div key={idx} className="bg-white border border-slate-200 p-4 rounded-xl flex items-start gap-4 hover:border-indigo-300 transition-all shadow-sm">
-                        <div className="p-3 bg-indigo-50 text-indigo-600 rounded-lg"><Paperclip size={20}/></div>
+                      <div key={idx} className="bg-white border border-slate-200 p-5 rounded-2xl flex items-start gap-4 hover:border-indigo-400 hover:shadow-md transition-all">
+                        <div className="p-3 bg-indigo-50 text-indigo-600 rounded-xl"><Paperclip size={24}/></div>
                         <div className="flex-1 overflow-hidden">
-                          <p className="font-bold text-slate-700 text-sm truncate" title={file.name}>{file.name}</p>
-                          <p className="text-xs text-slate-400 mt-1">{new Date(file.date).toLocaleDateString('ar-EG')}</p>
-                          <a href={file.url} target="_blank" rel="noopener noreferrer" className="text-indigo-600 text-xs font-bold mt-2 inline-flex items-center gap-1 hover:underline"><Download size={12}/> عرض وتحميل</a>
+                          <p className="font-black text-slate-800 text-sm truncate" title={file.name}>{file.name}</p>
+                          <p className="text-xs text-slate-400 mt-1 font-bold">{new Date(file.date).toLocaleDateString('ar-EG')}</p>
+                          <a href={file.url} target="_blank" rel="noopener noreferrer" className="text-indigo-600 text-xs font-black mt-3 inline-flex items-center gap-1 hover:underline bg-indigo-50 px-3 py-1 rounded-md"><Download size={14}/> عرض وتحميل الملف</a>
                         </div>
                       </div>
                     ))
                   ) : (
-                    <div className="col-span-full text-center py-10 bg-slate-50 rounded-2xl border border-slate-100 text-slate-400 font-bold">
-                      لا توجد مستندات مرفوعة لهذا العميل.
+                    <div className="col-span-full text-center py-16 bg-slate-50 rounded-3xl border border-dashed border-slate-200 text-slate-400 font-bold">
+                      <FileText size={48} className="mx-auto mb-4 opacity-50"/>
+                      لا توجد مستندات مرفوعة بملف هذا العميل حالياً.
                     </div>
                   )}
                 </div>
@@ -461,116 +488,132 @@ export default function Sales() {
         </div>
       )}
 
-      {/* باقي واجهة المبيعات */}
+      {/* --- نظام التبويبات والملاحة (Tabs) --- */}
       <div className="print-hide">
-        <div className="flex items-center gap-3 mb-6">
-          <div className="p-3 bg-indigo-600/10 rounded-xl text-indigo-600"><Calculator size={28} /></div>
-          <h2 className="text-3xl font-bold text-slate-800">إدارة المبيعات والأقساط</h2>
+        <div className="flex flex-wrap bg-white rounded-2xl p-2 shadow-sm border border-slate-100 w-full md:w-fit mb-8 gap-1">
+          <button onClick={() => setActiveTab('contracts')} className={`flex items-center gap-2 px-8 py-3 rounded-xl font-black transition-all ${activeTab === 'contracts' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-500 hover:bg-slate-50'}`}>
+            <UserCheck size={20}/> سجل التعاقدات والمبيعات
+          </button>
+          <button onClick={() => setActiveTab('installments')} className={`flex items-center gap-2 px-8 py-3 rounded-xl font-black transition-all ${activeTab === 'installments' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-500 hover:bg-slate-50'}`}>
+            <CalendarClock size={20}/> إدارة وتحصيل الأقساط
+          </button>
+          <button onClick={() => window.open('/merger', '_blank')} className="flex items-center gap-2 px-8 py-3 rounded-xl font-black transition-all text-slate-500 hover:bg-slate-50 hover:text-indigo-600">
+            <Layers size={20}/> أداة دمج المستندات
+          </button>
         </div>
 
-        <div className="flex flex-wrap gap-2 bg-slate-200 p-1 rounded-2xl w-full md:w-fit mb-6 text-sm font-bold">
-  <button onClick={() => setActiveTab('contracts')} className={`flex items-center gap-2 px-6 py-3 rounded-xl transition-all ${activeTab === 'contracts' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500'}`}><UserCheck size={18}/> إنشاء وسجل العقود</button>
-  <button onClick={() => setActiveTab('installments')} className={`flex items-center gap-2 px-6 py-3 rounded-xl transition-all ${activeTab === 'installments' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500'}`}><CalendarClock size={18}/> مراقبة وتحصيل الأقساط</button>
-  
-  {/* الزرار الجديد بتاع دمج الصور */}
-  <button onClick={() => window.open('/merger', '_blank')} className="flex items-center gap-2 px-6 py-3 rounded-xl transition-all text-slate-500 hover:bg-white hover:text-indigo-600 shadow-sm">
-    <Layers size={18}/> دمج صور العميل
-  </button>
-</div>
-          
-      
-
+        {/* --- تبويب العقود (Contracts) --- */}
         {activeTab === 'contracts' && (
           <div className="space-y-6 animate-fade-in">
-            <form onSubmit={handleSubmitContract} className={`bg-white p-6 rounded-2xl shadow-sm border grid grid-cols-1 md:grid-cols-6 gap-4 ${editingContractId ? 'border-amber-400 ring-4 ring-amber-50' : 'border-slate-100'}`}>
-              <h3 className="md:col-span-6 text-lg font-bold border-b pb-2 text-indigo-700">{editingContractId ? '✏️ تعديل بيانات العقد' : '1. بيانات العميل'}</h3>
-              <div className="space-y-1 md:col-span-2"><label className="text-xs font-bold text-slate-500">اسم العميل *</label><input type="text" required value={newContract.buyer_name} onChange={(e) => setNewContract({...newContract, buyer_name: e.target.value})} className="w-full p-3 rounded-xl border bg-slate-50" /></div>
-              <div className="space-y-1 md:col-span-2"><label className="text-xs font-bold text-slate-500">الرقم القومي *</label><input type="text" required maxLength="14" value={newContract.national_id} onChange={(e) => setNewContract({...newContract, national_id: e.target.value})} className="w-full p-3 rounded-xl border bg-slate-50" dir="ltr" /></div>
-              <div className="space-y-1 md:col-span-2"><label className="text-xs font-bold text-slate-500">الهاتف *</label><input type="text" required value={newContract.phone} onChange={(e) => setNewContract({...newContract, phone: e.target.value})} className="w-full p-3 rounded-xl border bg-slate-50" dir="ltr" /></div>
+            <form onSubmit={handleSubmitContract} className={`bg-white p-8 rounded-[2rem] shadow-sm border grid grid-cols-1 md:grid-cols-6 gap-6 ${editingContractId ? 'border-amber-400 ring-4 ring-amber-50' : 'border-slate-100'}`}>
+              <h3 className="md:col-span-6 text-xl font-black border-b border-slate-100 pb-4 text-slate-800 flex items-center gap-2">
+                {editingContractId ? <><Edit2 className="text-amber-500"/> تعديل بيانات العقد رقم #{editingContractId}</> : <><PlusCircle className="text-indigo-600"/> الخطوة 1: بيانات العميل (KYC)</>}
+              </h3>
               
-              <h3 className="md:col-span-6 text-lg font-bold border-b pb-2 mt-4 text-indigo-700">2. بيانات الوحدة والسداد</h3>
+              <div className="space-y-1 md:col-span-2"><label className="text-xs font-bold text-slate-500">اسم العميل الرباعي *</label><input type="text" required value={newContract.buyer_name} onChange={(e) => setNewContract({...newContract, buyer_name: e.target.value})} className="w-full p-4 rounded-xl border border-slate-200 bg-slate-50 outline-none focus:border-indigo-500 font-bold text-slate-800" /></div>
+              <div className="space-y-1 md:col-span-2"><label className="text-xs font-bold text-slate-500">الرقم القومي (14 رقم) *</label><input type="text" required maxLength="14" value={newContract.national_id} onChange={(e) => setNewContract({...newContract, national_id: e.target.value})} className="w-full p-4 rounded-xl border border-slate-200 bg-slate-50 outline-none focus:border-indigo-500 font-bold tracking-widest text-slate-800" dir="ltr" /></div>
+              <div className="space-y-1 md:col-span-2"><label className="text-xs font-bold text-slate-500">رقم الهاتف للتواصل *</label><input type="text" required value={newContract.phone} onChange={(e) => setNewContract({...newContract, phone: e.target.value})} className="w-full p-4 rounded-xl border border-slate-200 bg-slate-50 outline-none focus:border-indigo-500 font-bold text-slate-800" dir="ltr" /></div>
+              
+              <h3 className="md:col-span-6 text-xl font-black border-b border-slate-100 pb-4 mt-6 text-slate-800 flex items-center gap-2">
+                <Building className="text-indigo-600"/> الخطوة 2: بيانات الوحدة ونظام السداد (دعم الأرقام العشرية)
+              </h3>
+              
               <div className="md:col-span-3 space-y-1">
                 <label className="text-xs font-bold text-slate-500">مصدر العقار *</label>
                 <div className="flex bg-slate-100 rounded-xl p-1">
-                  <button type="button" onClick={() => setNewContract({...newContract, property_source: 'طرح داخلي', external_unit_name: ''})} className={`flex-1 py-2 text-xs font-bold rounded-lg ${newContract.property_source === 'طرح داخلي' ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-500'}`}>مشاريع الشركة</button>
-                  <button type="button" onClick={() => setNewContract({...newContract, property_source: 'عقار خارجي', offering_id: ''})} className={`flex-1 py-2 text-xs font-bold rounded-lg ${newContract.property_source === 'عقار خارجي' ? 'bg-white text-amber-700 shadow-sm' : 'text-slate-500'}`}>عقار خارجي</button>
+                  <button type="button" onClick={() => setNewContract({...newContract, property_source: 'طرح داخلي', external_unit_name: ''})} className={`flex-1 py-3 text-sm font-black rounded-lg transition-colors ${newContract.property_source === 'طرح داخلي' ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-500'}`}>مشاريع الشركة الخاصة</button>
+                  <button type="button" onClick={() => setNewContract({...newContract, property_source: 'عقار خارجي', offering_id: ''})} className={`flex-1 py-3 text-sm font-black rounded-lg transition-colors ${newContract.property_source === 'عقار خارجي' ? 'bg-white text-amber-700 shadow-sm' : 'text-slate-500'}`}>عقار خارجي (وساطة)</button>
                 </div>
               </div>
+              
               <div className="md:col-span-3 space-y-1">
-                <label className="text-xs font-bold text-slate-500">تحديد العقار *</label>
+                <label className="text-xs font-bold text-slate-500">تحديد المشروع أو العقار *</label>
                 {newContract.property_source === 'طرح داخلي' ? (
-                  <select required value={newContract.offering_id} onChange={(e) => setNewContract({...newContract, offering_id: e.target.value})} className="w-full p-3 rounded-xl border bg-slate-50">
-                    <option value="">-- اختر المشروع --</option>
+                  <select required value={newContract.offering_id} onChange={(e) => setNewContract({...newContract, offering_id: e.target.value})} className="w-full p-4 rounded-xl border border-slate-200 bg-slate-50 outline-none focus:border-indigo-500 font-bold text-slate-800">
+                    <option value="">-- اضغط لاختيار المشروع --</option>
                     {offerings.map(o => <option key={o.id} value={o.id}>{o.title}</option>)}
                   </select>
                 ) : (
-                  <input type="text" required value={newContract.external_unit_name} onChange={(e) => setNewContract({...newContract, external_unit_name: e.target.value})} className="w-full p-3 rounded-xl border bg-amber-50" />
+                  <input type="text" required value={newContract.external_unit_name} onChange={(e) => setNewContract({...newContract, external_unit_name: e.target.value})} className="w-full p-4 rounded-xl border border-amber-200 bg-amber-50 outline-none focus:border-amber-500 font-bold text-slate-800" placeholder="اكتب وصف/عنوان العقار الخارجي..." />
                 )}
               </div>
 
-              <div className="space-y-1 md:col-span-2"><label className="text-xs font-bold text-slate-500">الإجمالي *</label><input type="number" required value={newContract.total_price} onChange={(e) => setNewContract({...newContract, total_price: e.target.value})} className="w-full p-3 rounded-xl border font-black text-slate-800" /></div>
-              <div className="space-y-1 md:col-span-2"><label className="text-xs font-bold text-slate-500">المقدم *</label><input type="number" required value={newContract.down_payment} onChange={(e) => setNewContract({...newContract, down_payment: e.target.value})} className="w-full p-3 rounded-xl border font-bold text-emerald-600" /></div>
+              {/* حقول تقبل أرقام عشرية (Float) بفضل step="any" */}
+              <div className="space-y-1 md:col-span-2"><label className="text-xs font-bold text-slate-500">السعر الإجمالي (مسموح بالكسور) *</label><input type="number" step="any" required value={newContract.total_price} onChange={(e) => setNewContract({...newContract, total_price: e.target.value})} className="w-full p-4 rounded-xl border border-slate-200 bg-slate-50 outline-none focus:border-indigo-500 font-black text-slate-800 text-lg" dir="ltr" /></div>
+              <div className="space-y-1 md:col-span-2"><label className="text-xs font-bold text-slate-500">المقدم المدفوع (مسموح بالكسور) *</label><input type="number" step="any" required value={newContract.down_payment} onChange={(e) => setNewContract({...newContract, down_payment: e.target.value})} className="w-full p-4 rounded-xl border border-slate-200 bg-emerald-50 outline-none focus:border-emerald-500 font-black text-emerald-700 text-lg" dir="ltr" /></div>
+              <div className="space-y-1 md:col-span-2"><label className="text-xs font-bold text-slate-500">نسبة الغرامة اليومية (%) *</label><input type="number" step="any" required value={newContract.penalty_percent} onChange={(e) => setNewContract({...newContract, penalty_percent: e.target.value})} className="w-full p-4 rounded-xl border border-slate-200 bg-slate-50 outline-none focus:border-indigo-500 font-bold text-slate-800" dir="ltr" /></div>
               
-              <div className="space-y-1 md:col-span-1"><label className="text-xs font-bold text-indigo-600">المدة (شهور) *</label><input type="number" required value={newContract.installment_months} onChange={(e) => setNewContract({...newContract, installment_months: e.target.value})} className="w-full p-3 rounded-xl border bg-indigo-50 outline-none" /></div>
-              <div className="space-y-1 md:col-span-1"><label className="text-xs font-bold text-indigo-600">نظام الدفع *</label><select value={newContract.payment_frequency} onChange={(e) => setNewContract({...newContract, payment_frequency: e.target.value})} className="w-full p-3 rounded-xl border bg-indigo-50 outline-none"><option>شهري</option><option>ربع سنوي</option><option>نصف سنوي</option><option>سنوي</option></select></div>
-
-              <div className="space-y-1 md:col-span-3"><label className="text-xs font-bold text-slate-500">تاريخ التعاقد (أول قسط)</label><input type="date" value={newContract.start_date} onChange={(e) => setNewContract({...newContract, start_date: e.target.value})} className="w-full p-3 rounded-xl border bg-slate-50" /></div>
+              <div className="space-y-1 md:col-span-2"><label className="text-xs font-bold text-indigo-700">مدة التقسيط (بالأشهر) *</label><input type="number" required value={newContract.installment_months} onChange={(e) => setNewContract({...newContract, installment_months: e.target.value})} className="w-full p-4 rounded-xl border border-indigo-200 bg-indigo-50 outline-none focus:border-indigo-500 font-black text-indigo-900" /></div>
+              <div className="space-y-1 md:col-span-2"><label className="text-xs font-bold text-indigo-700">نظام الدفع (تكرار القسط) *</label><select value={newContract.payment_frequency} onChange={(e) => setNewContract({...newContract, payment_frequency: e.target.value})} className="w-full p-4 rounded-xl border border-indigo-200 bg-indigo-50 outline-none focus:border-indigo-500 font-black text-indigo-900"><option>شهري</option><option>ربع سنوي</option><option>نصف سنوي</option><option>سنوي</option></select></div>
+              <div className="space-y-1 md:col-span-2"><label className="text-xs font-bold text-slate-500">تاريخ بدء الأقساط (تاريخ الاستحقاق)</label><input type="date" value={newContract.start_date} onChange={(e) => setNewContract({...newContract, start_date: e.target.value})} className="w-full p-4 rounded-xl border border-slate-200 bg-slate-50 outline-none focus:border-indigo-500 font-bold text-slate-800" /></div>
               
-              <div className="space-y-3 md:col-span-6 bg-indigo-50/50 p-4 rounded-xl border border-indigo-100">
-                <label className="text-sm font-bold text-indigo-700 flex items-center gap-2">
-                  <Paperclip size={18}/> إرفاق ملفات العميل (اختياري)
+              <div className="space-y-4 md:col-span-6 bg-slate-50 p-6 rounded-2xl border border-dashed border-slate-300">
+                <label className="text-sm font-black text-slate-700 flex items-center gap-2">
+                  <Paperclip size={20}/> المرفقات الورقية (بطاقة، إيصالات، عقود سابقة)
                 </label>
                 {contractFiles.length > 0 && (
-                  <div className="flex flex-wrap gap-2">
+                  <div className="flex flex-wrap gap-3">
                     {contractFiles.map((file, idx) => (
-                      <div key={idx} className="flex items-center gap-2 bg-white border border-indigo-200 px-3 py-1.5 rounded-lg shadow-sm">
-                        <span className="text-xs font-bold text-indigo-700 truncate max-w-[150px]" title={file.name}>{file.name}</span>
-                        <button type="button" onClick={() => handleRemoveContractFile(idx)} className="text-red-400 hover:text-red-600"><X size={14}/></button>
+                      <div key={idx} className="flex items-center gap-3 bg-white border border-slate-200 px-4 py-2 rounded-xl shadow-sm">
+                        <span className="text-sm font-bold text-slate-600 truncate max-w-[200px]" title={file.name}>{file.name}</span>
+                        <button type="button" onClick={() => handleRemoveContractFile(idx)} className="text-red-400 hover:text-red-600 bg-red-50 p-1 rounded-md"><X size={16}/></button>
                       </div>
                     ))}
                   </div>
                 )}
                 <div>
-                  <label className="inline-flex items-center gap-2 bg-indigo-100 hover:bg-indigo-200 text-indigo-700 px-4 py-2 rounded-xl font-bold cursor-pointer transition-all text-sm shadow-sm">
-                    <PlusCircle size={16}/> {contractFiles.length > 0 ? 'إضافة مستند آخر' : 'اختر ملفات للرفع'}
+                  <label className="inline-flex items-center gap-2 bg-white border border-slate-200 hover:border-indigo-400 text-indigo-600 px-6 py-3 rounded-xl font-bold cursor-pointer transition-all shadow-sm">
+                    <PlusCircle size={18}/> {contractFiles.length > 0 ? 'إضافة المزيد من الملفات' : 'تصفح جهازك لاختيار الملفات للرفع'}
                     <input type="file" multiple onChange={handleAddContractFiles} className="hidden" accept="image/*,.pdf,.doc,.docx" />
                   </label>
                 </div>
               </div>
 
-              <div className="md:col-span-6 flex gap-3 mt-4">
-                <button type="submit" disabled={loading} className={`flex-1 p-4 rounded-xl font-bold text-white transition-all shadow-lg text-lg flex justify-center items-center gap-2 ${editingContractId ? 'bg-amber-500 hover:bg-amber-600' : 'bg-indigo-600 hover:bg-indigo-700'}`}>
-                  <ArrowLeftRight /> {editingContractId ? 'تحديث بيانات العقد' : 'إنشاء العقد وجدولة الأقساط'}
+              <div className="md:col-span-6 flex gap-4 mt-2">
+                <button type="submit" disabled={loading} className={`flex-1 p-5 rounded-2xl font-black text-white transition-all shadow-xl text-lg flex justify-center items-center gap-2 ${editingContractId ? 'bg-amber-500 hover:bg-amber-600 shadow-amber-500/20' : 'bg-indigo-600 hover:bg-indigo-700 shadow-indigo-600/20'}`}>
+                  {editingContractId ? 'حفظ التحديثات' : 'تسجيل العقد وجدولة الأقساط تلقائياً'}
                 </button>
                 {editingContractId && (
-                  <button type="button" onClick={cancelEdit} className="px-8 py-4 bg-slate-200 text-slate-700 hover:bg-slate-300 font-bold rounded-xl flex justify-center items-center gap-2 transition-all">
-                    <X size={20}/> إلغاء التعديل
+                  <button type="button" onClick={cancelEdit} className="px-10 py-5 bg-slate-100 text-slate-600 hover:bg-slate-200 font-black rounded-2xl flex justify-center items-center gap-2 transition-all">
+                    <X size={20}/> إلغاء
                   </button>
                 )}
               </div>
             </form>
 
-            <div className="bg-white rounded-2xl shadow-sm border overflow-hidden">
-              <div className="p-4 border-b flex justify-between items-center bg-slate-50">
-                <h3 className="font-bold text-slate-700">سجل العقود</h3>
-                <div className="relative w-64"><input type="text" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="بحث..." className="w-full pl-8 pr-3 py-2 text-sm rounded-lg border outline-none" /><Search size={14} className="absolute left-3 top-3 text-slate-400" /></div>
+            <div className="bg-white rounded-[2rem] shadow-sm border border-slate-100 overflow-hidden mt-8">
+              <div className="p-6 border-b border-slate-100 flex flex-col md:flex-row justify-between items-center gap-4 bg-slate-50/50">
+                <h3 className="font-black text-slate-800 text-lg flex items-center gap-2"><UserCheck className="text-indigo-600"/> الأرشيف وسجل المبيعات</h3>
+                <div className="relative w-full md:w-80">
+                  <input type="text" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="بحث باسم العميل أو الرقم القومي..." className="w-full pl-10 pr-4 py-3 text-sm font-bold rounded-xl border border-slate-200 outline-none focus:border-indigo-500 shadow-sm" />
+                  <Search size={18} className="absolute left-4 top-3.5 text-slate-400" />
+                </div>
               </div>
               <div className="overflow-x-auto">
-                <table className="w-full text-right text-sm min-w-[900px]">
-                  <thead className="bg-slate-50 text-slate-600 border-b">
-                    <tr><th className="p-4">العميل</th><th className="p-4">العقار</th><th className="p-4">السعر والمقدم</th><th className="p-4 text-center">إجراءات</th></tr>
+                <table className="w-full text-right text-sm min-w-[1000px]">
+                  <thead className="bg-slate-100 text-slate-600 border-b border-slate-200">
+                    <tr><th className="p-5 font-bold">العميل (بيانات الاتصال)</th><th className="p-5 font-bold">العقار المتعاقد عليه</th><th className="p-5 font-bold">القيمة والمدفوع</th><th className="p-5 text-center font-bold">إدارة الملف</th></tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
                     {filteredContracts.map(c => (
-                      <tr key={c.id} className="hover:bg-slate-50">
-                        <td className="p-4 font-bold">{c.buyers?.full_name} <br/><span className="text-xs text-slate-400 font-normal">{c.buyers?.phone}</span></td>
-                        <td className="p-4 font-semibold text-slate-700">{c.property_source === 'طرح داخلي' ? c.offerings?.title : c.external_unit_name}</td>
-                        <td className="p-4"><span className="font-black text-slate-800 block">{Number(c.total_price).toLocaleString()} ج</span></td>
-                        <td className="p-4 flex justify-center gap-2">
-                          <button onClick={() => setStatementData(c)} className="p-2 bg-emerald-50 text-emerald-600 rounded-lg hover:bg-emerald-600 hover:text-white" title="كشف الحساب والمرفقات"><FileText size={18}/></button>
-                          <button onClick={() => handlePrint(c)} className="p-2 bg-indigo-50 text-indigo-600 rounded-lg hover:bg-indigo-600 hover:text-white" title="طباعة العقد"><Printer size={18}/></button>
-                          <button onClick={() => startEditContract(c)} className="p-2 bg-amber-50 text-amber-600 rounded-lg hover:bg-amber-600 hover:text-white" title="تعديل العقد"><Edit2 size={18}/></button>
-                          <button onClick={() => handleDeleteContract(c.id, c.buyers?.full_name)} className="p-2 bg-red-50 text-red-500 rounded-lg hover:bg-red-600 hover:text-white" title="حذف نهائي"><Trash2 size={18}/></button>
+                      <tr key={c.id} className="hover:bg-slate-50 transition-colors">
+                        <td className="p-5">
+                          <p className="font-black text-slate-800 text-base">{c.buyers?.full_name}</p>
+                          <p className="text-xs text-slate-500 font-bold mt-1" dir="ltr">{c.buyers?.phone}</p>
+                        </td>
+                        <td className="p-5">
+                          <p className="font-bold text-slate-700">{c.property_source === 'طرح داخلي' ? c.offerings?.title : c.external_unit_name}</p>
+                          <span className="inline-block mt-1 px-2 py-1 bg-slate-100 text-slate-500 rounded-md text-[10px] font-bold">{c.property_source}</span>
+                        </td>
+                        <td className="p-5">
+                          <p className="font-black text-indigo-700 text-lg block" dir="ltr">{Number(c.total_price).toLocaleString()} <span className="text-xs text-slate-500 font-bold">ج.م</span></p>
+                          <p className="text-[10px] text-emerald-600 font-bold mt-1" dir="ltr">مقدم: {Number(c.down_payment).toLocaleString()} ج.م</p>
+                        </td>
+                        <td className="p-5 flex justify-center gap-3">
+                          <button onClick={() => setStatementData(c)} className="p-2.5 bg-slate-100 text-slate-600 rounded-xl hover:bg-slate-800 hover:text-white transition-all shadow-sm" title="فتح كشف الحساب والمرفقات"><FileText size={18}/></button>
+                          <button onClick={() => handlePrint(c)} className="p-2.5 bg-indigo-50 text-indigo-600 rounded-xl hover:bg-indigo-600 hover:text-white transition-all shadow-sm" title="طباعة العقد الرسمي"><Printer size={18}/></button>
+                          <button onClick={() => startEditContract(c)} className="p-2.5 bg-amber-50 text-amber-600 rounded-xl hover:bg-amber-500 hover:text-white transition-all shadow-sm" title="تعديل تفاصيل العقد"><Edit2 size={18}/></button>
+                          <button onClick={() => handleDeleteContract(c.id, c.buyers?.full_name)} className="p-2.5 bg-red-50 text-red-600 rounded-xl hover:bg-red-500 hover:text-white transition-all shadow-sm" title="حذف العقد نهائياً"><Trash2 size={18}/></button>
                         </td>
                       </tr>
                     ))}
@@ -581,66 +624,73 @@ export default function Sales() {
           </div>
         )}
 
+        {/* --- تبويب الأقساط (Installments) --- */}
         {activeTab === 'installments' && (
           <div className="space-y-6 animate-fade-in">
-            <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm flex flex-col md:flex-row items-center justify-between gap-4">
-               <div>
-                 <h3 className="font-bold text-slate-800 text-lg flex items-center gap-2"><Receipt size={20} className="text-indigo-600"/> تحصيل سريع</h3>
-                 <p className="text-xs text-slate-500 mt-1">سجل دفعة خارج الجدول لأي عميل مباشرة من هنا</p>
+            <div className="bg-gradient-to-l from-indigo-600 to-blue-700 p-8 rounded-[2rem] shadow-xl flex flex-col md:flex-row items-center justify-between gap-6">
+               <div className="text-white">
+                 <h3 className="font-black text-2xl flex items-center gap-3 mb-2"><Receipt size={28}/> مركز التحصيل السريع</h3>
+                 <p className="text-sm text-indigo-100 font-medium">سجل الدفعات الاستثنائية، أقساط الكاش، والمخالصات خارج الجدول الزمني من هنا مباشرة.</p>
                </div>
-               <button onClick={() => setShowGlobalPaymentForm(!showGlobalPaymentForm)} className="bg-indigo-100 text-indigo-700 hover:bg-indigo-600 hover:text-white px-6 py-2 rounded-xl font-bold transition-all flex items-center gap-2">
-                  <PlusCircle size={18} /> {showGlobalPaymentForm ? 'إغلاق النافذة' : 'تسجيل دفعة استثنائية'}
+               <button onClick={() => setShowGlobalPaymentForm(!showGlobalPaymentForm)} className="bg-white text-indigo-700 hover:bg-indigo-50 px-8 py-4 rounded-2xl font-black transition-all flex items-center gap-2 shadow-lg hover:scale-105">
+                  <PlusCircle size={20} /> {showGlobalPaymentForm ? 'إلغاء وإغلاق النافذة' : 'فتح شاشة التحصيل'}
                </button>
             </div>
 
             {showGlobalPaymentForm && (
-              <form onSubmit={handleGlobalCustomPaymentSubmit} className="bg-indigo-50 p-6 rounded-2xl border border-indigo-100 grid grid-cols-1 md:grid-cols-5 gap-4 items-end animate-fade-in">
-                <div className="space-y-1 md:col-span-2">
-                  <label className="text-xs font-bold text-indigo-800">اختر العميل والعقار *</label>
-                  <select required value={globalCustomPayment.contract_id} onChange={(e) => setGlobalCustomPayment({...globalCustomPayment, contract_id: e.target.value})} className="w-full p-3 rounded-xl border border-indigo-200 outline-none">
+              <form onSubmit={handleGlobalCustomPaymentSubmit} className="bg-white p-8 rounded-[2rem] border border-slate-100 shadow-lg grid grid-cols-1 md:grid-cols-5 gap-6 items-end animate-fade-in">
+                <div className="space-y-2 md:col-span-2">
+                  <label className="text-xs font-bold text-slate-500">اختر العميل والعقار المراد خصم الدفعة منه *</label>
+                  <select required value={globalCustomPayment.contract_id} onChange={(e) => setGlobalCustomPayment({...globalCustomPayment, contract_id: e.target.value})} className="w-full p-4 rounded-xl border border-slate-200 outline-none focus:border-indigo-500 font-bold bg-slate-50">
                     <option value="">-- ابحث واختار العقد --</option>
                     {contracts.map(c => <option key={c.id} value={c.id}>{c.buyers?.full_name} - ({c.property_source === 'طرح داخلي' ? c.offerings?.title : c.external_unit_name})</option>)}
                   </select>
                 </div>
-                <div className="space-y-1 md:col-span-1"><label className="text-xs font-bold text-indigo-800">المبلغ *</label><input type="number" required value={globalCustomPayment.amount} onChange={e=>setGlobalCustomPayment({...globalCustomPayment, amount:e.target.value})} className="w-full p-3 rounded-xl border-indigo-200 outline-none"/></div>
-                <div className="space-y-1 md:col-span-1"><label className="text-xs font-bold text-indigo-800">التاريخ *</label><input type="date" required value={globalCustomPayment.date} onChange={e=>setGlobalCustomPayment({...globalCustomPayment, date:e.target.value})} className="w-full p-3 rounded-xl border-indigo-200 outline-none"/></div>
-                <button type="submit" disabled={loading} className="md:col-span-1 w-full p-3 bg-indigo-600 text-white font-bold rounded-xl hover:bg-indigo-700 shadow-md">حفظ وتأكيد</button>
+                <div className="space-y-2 md:col-span-1"><label className="text-xs font-bold text-slate-500">مبلغ التحصيل (Float) *</label><input type="number" step="any" required value={globalCustomPayment.amount} onChange={e=>setGlobalCustomPayment({...globalCustomPayment, amount:e.target.value})} className="w-full p-4 rounded-xl border border-slate-200 outline-none focus:border-indigo-500 font-black bg-slate-50"/></div>
+                <div className="space-y-2 md:col-span-1"><label className="text-xs font-bold text-slate-500">تاريخ السداد الفعلي *</label><input type="date" required value={globalCustomPayment.date} onChange={e=>setGlobalCustomPayment({...globalCustomPayment, date:e.target.value})} className="w-full p-4 rounded-xl border border-slate-200 outline-none focus:border-indigo-500 font-bold bg-slate-50"/></div>
+                <button type="submit" disabled={loading} className="md:col-span-1 w-full p-4 bg-indigo-600 text-white font-black rounded-xl hover:bg-indigo-700 shadow-xl transition-all">تأكيد الخصم</button>
               </form>
             )}
 
-            <div className="bg-white rounded-2xl shadow-sm border overflow-x-auto">
-              <table className="w-full text-right text-sm min-w-[1100px]">
-                <thead className="bg-slate-900 text-white border-b">
-                  <tr><th className="p-4">الاستحقاق</th><th className="p-4">العميل والعقار</th><th className="p-4">القسط</th><th className="p-4">حالة التأخير</th><th className="p-4">المطلوب</th><th className="p-4 text-center">إجراء وتحصيل</th></tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {installments.map(inst => {
-                    const isPaid = inst.status === 'مدفوع';
-                    const { late, daysLate, penalty } = isPaid ? { late:false, daysLate:0, penalty:0 } : calculateLateInfo(inst.due_date, inst.amount_due, inst.contracts?.penalty_percent);
-                    const finalAmount = isPaid ? inst.amount_due + (inst.penalty_amount || 0) : inst.amount_due + penalty;
-                    
-                    return (
-                      <tr key={inst.id} className={`transition-colors ${isPaid ? 'bg-emerald-50/30' : late ? 'bg-red-50/50' : 'hover:bg-slate-50'}`}>
-                        <td className="p-4 font-bold text-slate-700">{new Date(inst.due_date).toLocaleDateString('ar-EG')}</td>
-                        <td className="p-4"><p className="font-bold text-slate-800">{inst.contracts?.buyers?.full_name}</p><p className="text-[10px] text-slate-500 mt-1">{inst.notes || 'قسط مجدول'}</p></td>
-                        <td className="p-4 font-black text-slate-700">{Number(inst.amount_due).toLocaleString()} ج</td>
-                        <td className="p-4">{isPaid ? <span className="text-emerald-600 text-xs font-bold">تم السداد</span> : late ? <div><p className="text-xs font-bold text-red-600">تأخير {daysLate} يوم</p><p className="text-[10px] text-red-500">غرامة: +{penalty.toLocaleString()}</p></div> : <span className="text-slate-400 text-xs">في الانتظار</span>}</td>
-                        <td className={`p-4 font-black text-lg ${late && !isPaid ? 'text-red-600' : 'text-slate-800'}`}>{Number(finalAmount).toLocaleString()} ج</td>
-                        <td className="p-4 flex justify-center gap-2">
-                          {isPaid ? (
-                            <div className="flex flex-col items-center gap-1 text-emerald-600"><CheckCircle size={20}/><span className="text-[10px] font-bold">{new Date(inst.paid_date).toLocaleDateString('ar-EG')}</span></div>
-                          ) : (
-                            <>
-                              {late && <button onClick={() => sendWhatsApp(inst.contracts?.buyers?.phone, inst.contracts?.buyers?.full_name, finalAmount, new Date(inst.due_date).toLocaleDateString('ar-EG'))} className="p-2 bg-green-100 text-green-600 rounded-lg hover:bg-green-600 hover:text-white"><MessageCircle size={18}/></button>}
-                              <button onClick={() => handlePayInstallment(inst, penalty)} className="flex items-center gap-1 bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-2 rounded-lg font-bold"><Receipt size={16}/> تحصيل</button>
-                            </>
-                          )}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+            <div className="bg-white rounded-[2rem] shadow-sm border border-slate-100 overflow-hidden mt-8">
+              <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+                 <h3 className="font-black text-slate-800 text-lg flex items-center gap-2"><CalendarClock className="text-indigo-600"/> جدول المراقبة والاستحقاقات الشامل</h3>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-right text-sm min-w-[1100px]">
+                  <thead className="bg-slate-100 text-slate-600 border-b border-slate-200">
+                    <tr><th className="p-5 font-bold">تاريخ الاستحقاق</th><th className="p-5 font-bold">العميل والمشروع</th><th className="p-5 font-bold">قيمة القسط</th><th className="p-5 font-bold">موقف التأخير</th><th className="p-5 font-bold">إجمالي المطلوب</th><th className="p-5 text-center font-bold">إجراءات التحصيل</th></tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {installments.map(inst => {
+                      const isPaid = inst.status === 'مدفوع';
+                      const { late, daysLate, penalty } = isPaid ? { late:false, daysLate:0, penalty:0 } : calculateLateInfo(inst.due_date, inst.amount_due, inst.contracts?.penalty_percent);
+                      const finalAmount = isPaid ? inst.amount_due + (inst.penalty_amount || 0) : inst.amount_due + penalty;
+                      return (
+                        <tr key={inst.id} className={`transition-colors ${isPaid ? 'bg-emerald-50/30' : late ? 'bg-red-50/20' : 'hover:bg-slate-50'}`}>
+                          <td className="p-5 font-black text-slate-800">{new Date(inst.due_date).toLocaleDateString('ar-EG')}</td>
+                          <td className="p-5"><p className="font-bold text-slate-900 text-base">{inst.contracts?.buyers?.full_name}</p><p className="text-xs text-slate-500 font-bold mt-1 bg-slate-100 inline-block px-2 py-0.5 rounded">{inst.notes || 'قسط مجدول'}</p></td>
+                          <td className="p-5 font-black text-slate-600" dir="ltr">{Number(inst.amount_due).toLocaleString()} <span className="text-[10px] font-bold">ج.م</span></td>
+                          <td className="p-5">
+                            {isPaid ? <span className="text-emerald-700 text-xs bg-emerald-100 px-3 py-1 rounded-md font-black">تم السداد</span> : late ? <div><p className="text-xs font-black text-red-600 bg-red-100 inline-block px-2 py-0.5 rounded-md mb-1">متأخر {daysLate} يوم</p><p className="text-[10px] font-black text-red-500" dir="ltr">+ {penalty.toLocaleString()} غرامة</p></div> : <span className="text-slate-400 text-xs font-bold bg-slate-100 px-2 py-1 rounded-md">في الانتظار</span>}
+                          </td>
+                          <td className={`p-5 font-black text-xl ${late && !isPaid ? 'text-red-600' : 'text-indigo-700'}`} dir="ltr">{Number(finalAmount.toFixed(2)).toLocaleString()} <span className="text-[10px] font-bold">ج.م</span></td>
+                          <td className="p-5 flex justify-center gap-3">
+                            {isPaid ? (
+                              <div className="flex flex-col items-center gap-1 text-emerald-600 bg-emerald-50 px-4 py-2 rounded-xl border border-emerald-100"><CheckCircle size={20}/><span className="text-[10px] font-black">{new Date(inst.paid_date).toLocaleDateString('ar-EG')}</span></div>
+                            ) : (
+                              <>
+                                {late && <button onClick={() => sendWhatsApp(inst.contracts?.buyers?.phone, inst.contracts?.buyers?.full_name, finalAmount.toFixed(2), new Date(inst.due_date).toLocaleDateString('ar-EG'))} className="p-3 bg-green-50 text-green-600 rounded-xl hover:bg-green-500 hover:text-white transition-all shadow-sm" title="إرسال تذكير واتساب"><MessageCircle size={20}/></button>}
+                                <button onClick={() => handlePayInstallment(inst, penalty)} className="flex items-center gap-2 bg-slate-900 hover:bg-blue-600 text-white px-5 py-3 rounded-xl font-black transition-all shadow-md"><Receipt size={18}/> تحصيل وتأكيد</button>
+                              </>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
             </div>
           </div>
         )}
